@@ -1,68 +1,38 @@
+from glob import glob
+from uu import decode
+
 import os
-import xml.etree.ElementTree as eT
-import tensorflow as tf
+import torch
+from PIL import Image
 
+from torch.utils.data import Dataset
+from torchvision.io import decode_image
 
-def parse_xml(file, directory):
-    tree = eT.parse(file)
-    root = tree.getroot()
+class YoloDataset(Dataset):
+    def __init__(self, images_dir, labels_dir, transform=None):
+        self.images_dir = images_dir
+        self.labels_dir = labels_dir
+        self.transform = transform
+        self.image_files = [f for f in os.listdir(images_dir) if f.endswith('.jpg') or f.endswith('.png')]
 
-    img_file = root.find('filename').text
-    image_path = os.path.join(directory, img_file)
+    def __len__(self):
+        return len(self.image_files)
 
-    boxes = []
-    labels = []
+    def __getitem__(self, idx):
+        img_path = os.path.join(self.images_dir, os.listdir(self.images_dir)[idx])
+        img = Image.open(img_path).convert('RGB')
 
-    for obj in root.findall('object'):
-        label = obj.find('name').text
+        label_path = os.path.join(self.labels_dir,os.listdir(self.images_dir)[idx].replace('.jpg', '.txt'))
+        with open(label_path, 'r') as f:
+            lines = f.readlines()
+            class_ids = [int(line.split()[0]) for line in lines]
 
-        bbox = obj.find('bndbox')
-        xmin = int(bbox.find('xmin').text)
-        ymin = int(bbox.find('ymin').text)
-        xmax = int(bbox.find('xmax').text)
-        ymax = int(bbox.find('ymax').text)
+        if class_ids:
+            label = class_ids[0]
+        else:
+            label = 0
 
-        # Thank you PyCharm code completion!
-        boxes.append([xmin, ymin, xmax, ymax])
-        labels.append(label)
+        if self.transform:
+            img = self.transform(img)
 
-    return image_path, boxes, labels
-
-def load_preprocess_imgs(image_path, boxes, labels):
-    image = tf.io.read_file(image_path)
-    image = tf.image.decode_jpeg(image, channels=3)
-
-    image = tf.image.convert_image_dtype(image, tf.float32)
-
-    boxes = tf.convert_to_tensor(boxes, dtype=tf.float32)
-    labels = tf.convert_to_tensor(labels, dtype=tf.string)
-
-    return image, boxes, labels
-
-def get_dataset(files, img_dir):
-    image_paths = []
-    boxes_list = []
-    labels_list = []
-
-    for xml_file in files:
-        image_path, boxes, labels = parse_xml(xml_file, img_dir)
-        image_paths.append(image_path)
-        boxes_list.append(boxes)
-        labels_list.append(labels)
-
-    dataset = tf.data.Dataset.from_tensor_slices((image_paths, boxes_list, labels_list))
-    dataset = dataset.map(
-        lambda img_path, bs, ls: load_preprocess_imgs(img_path, bs, ls),
-        num_parallel_calls=tf.data.experimental.AUTOTUNE
-    )
-
-    dataset = dataset.shuffle(buffer_size=500)
-    dataset = dataset.batch(8)
-    dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
-
-    return dataset
-
-def get_xml_paths() -> [str]:
-    files = os.listdir("../data/images/raw_pascalvoc")
-    files = [f for f in files if f[-4:] == ".xml"]
-    return files
+        return img, torch.tensor(label)
