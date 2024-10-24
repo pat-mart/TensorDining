@@ -1,19 +1,15 @@
-from glob import glob
-from uu import decode
-
 import os
 import torch
 from PIL import Image
 
 from torch.utils.data import Dataset
-from torchvision.io import decode_image
 
 class YoloDataset(Dataset):
     def __init__(self, images_dir, labels_dir, transform=None):
         self.images_dir = images_dir
         self.labels_dir = labels_dir
         self.transform = transform
-        self.image_files = [f for f in os.listdir(images_dir) if f.endswith('.jpg') or f.endswith('.png')]
+        self.image_files = [f for f in os.listdir(images_dir) if f.endswith('.jpg')]
 
     def __len__(self):
         return len(self.image_files)
