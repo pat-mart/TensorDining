@@ -1,0 +1,5 @@
+train: /Users/patrickmartin/PycharmProjects/BetterDining/dataset
+val: /Users/patrickmartin/PycharmProjects/BetterDining/dataset
+
+nc: 2
+names: ["open", "taken"]
